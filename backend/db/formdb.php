@@ -5,5 +5,4 @@
     $db = 'forms';
 
     $conn1 = new mysqli($server,$user,$pass,$db);
-
 ?>
