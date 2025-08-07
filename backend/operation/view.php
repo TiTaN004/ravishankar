@@ -5,11 +5,13 @@ $id = $_GET['id'];
 if (isset($_GET['r']) === true)
     $refer_code = $_GET['r'];
 
-$q = "select * from forms where f_id = '$id'";
-
-$result = $conn1->query($q);
-
+$stmt = $conn1->prepare("SELECT * FROM forms WHERE f_id = ?");
+$stmt->bind_param("s", $id);
+$stmt->execute();
+$result = $stmt->get_result();
 $row = $result->fetch_assoc();
+$stmt->close();
+
 $id = $row['f_id'];
 $c_url = $row['c_url'];
 $title = $row['title'];
@@ -17,6 +19,7 @@ $img_url = $row['img_url'];
 $status = $row['status'];
 $isActiveVender = $row['isActiveVender'];
 $limit = $row['res_limit'];
+
 if($limit==NULL && $status == 1){
     $status=1;
 }
@@ -25,8 +28,10 @@ else if ($limit==NULL && $status == 0){
 }
 else if ($limit==0){
     $status=0;
-            $q2 = "UPDATE forms SET status = $status  WHERE res_limit=$limit ";
-            $conn1->query($q2);  
+    $stmt = $conn1->prepare("UPDATE forms SET status = ? WHERE res_limit = ?");
+    $stmt->bind_param("ii", $status, $limit);
+    $stmt->execute();
+    $stmt->close();
 }
 
 ?>
@@ -94,7 +99,7 @@ if($status==1){
         <div class="card">
             <div class="card-header d-flex justify-content-center">
                 <div class="header-title ">
-                    <h4 class="card-title"><?php echo $title ?></h4>
+                    <h4 class="card-title"><?php echo htmlspecialchars($title) ?></h4>
                 </div>
             </div>
             <div class="card-body">
@@ -134,66 +139,84 @@ if($status==1){
     </div>
     <?php
     if (isset($_POST['submit'])) {
-        $name = $_POST['name'];
-        $number = $_POST['number'];
-        $email = $_POST['email'];
-        $vender = isset($_POST['vender']) ? $_POST['vender'] : '' ;
+        $name = trim($_POST['name']);
+        $number = trim($_POST['number']);
+        $email = trim($_POST['email']);
+        $vender = isset($_POST['vender']) ? trim($_POST['vender']) : '';
         $currentDateTime = date('Y-m-d g:i:s A');
         
-        
+        // Validate Indian mobile number
         if (!preg_match('/^[6-9]\d{9}$/', $number)) {
             echo "<script>alert('Invalid Indian mobile number.');</script>";
-            return;
-        }
-        
-
-        if (isset($refer_code) === true){
-            $q = "insert into form_data (form_title, refer_num, field_1, field_2, field_3, field_4,created_at,f_id) values ('$title',$refer_code,'$name','$number','$email','$vender','$currentDateTime','$id')";
-    
-            if($limit!=NULL){
-            $dec_limit=$limit-1;
-            $q1 = "UPDATE forms SET res_limit = $dec_limit  WHERE res_limit=$limit ";
-            $conn1->query($q1);
-            }
-              if($limit==1){
-                        $q2 = "UPDATE forms SET status = 0  WHERE f_id='$id' ";
-                        $conn1->query($q2);
-            }
-            }
-
-        else{
-            $q = "insert into form_data (form_title, field_1, field_2, field_3, field_4,created_at,f_id) values ('$title','$name','$number','$email','$vender','$currentDateTime','$id')";
-        
-            if($limit!=NULL){
-            $dec_limit=$limit-1;
-            $q1 = "UPDATE forms SET res_limit = $dec_limit  WHERE res_limit=$limit ";
-            $conn1->query($q1);
-            }
-             if($limit==1){
-                        $q2 = "UPDATE forms SET status = 0  WHERE f_id='$id' ";
-                        $conn1->query($q2);
-            }
-        }
-
-        if ($conn1->query($q)) {
-            $last_rec = $conn1->insert_id;
-            $sql = "select u_id from form_data where id = $last_rec";
-            $result = $conn1->query($sql);
-            $row = $result->fetch_assoc();
-            $refer_url = str_replace('{unique_user_id}', $row['u_id'], $c_url);
-
-            if (isset($refer_code) === true) {
-                // Replace {refer} in the redirect URL with the unique identifier
-                $refer_url = str_replace('{refer}', $refer_code, $refer_url);
-                header('location: ' . $refer_url);
-            } else {
-                $refer_url = str_replace('{refer}', "", $refer_url);
-                header('location: ' . $refer_url);
-            }
         } else {
-            echo "<script>alert('error submitting form');</scrip>";
+            // DUPLICATE CHECK using prepared statement
+            $duplicate_stmt = $conn1->prepare("SELECT id FROM form_data WHERE field_1 = ? AND field_2 = ? AND field_3 = ? AND f_id = ? LIMIT 1");
+            $duplicate_stmt->bind_param("ssss", $name, $number, $email, $id);
+            $duplicate_stmt->execute();
+            $duplicate_result = $duplicate_stmt->get_result();
+            
+            if ($duplicate_result->num_rows > 0) {
+                echo "<script>alert('You have already submitted this form. Duplicate submissions are not allowed.');</script>";
+                $duplicate_stmt->close();
+            } else {
+                $duplicate_stmt->close();
+                
+                // If no duplicate found, proceed with insertion using prepared statements
+                if (isset($refer_code) === true) {
+                    // Insert with refer code
+                    $insert_stmt = $conn1->prepare("INSERT INTO form_data (form_title, refer_num, field_1, field_2, field_3, field_4, field_5, created_at, f_id) VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)");
+                    $insert_stmt->bind_param("ssssssss", $title, $refer_code, $name, $number, $email, $vender, $currentDateTime, $id);
+                } else {
+                    // Insert without refer code
+                    $insert_stmt = $conn1->prepare("INSERT INTO form_data (form_title, refer_num, field_1, field_2, field_3, field_4, field_5, created_at, f_id) VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)");
+                    $insert_stmt->bind_param("ssssssss", $title, '', $name, $number, $email, $vender, $currentDateTime, $id);
+                }
+                
+                if ($insert_stmt->execute()) {
+                    $last_rec = $conn1->insert_id;
+                    $insert_stmt->close();
+                    
+                    // Update response limit if needed
+                    if($limit != NULL && $limit > 0){
+                        $dec_limit = $limit - 1;
+                        $limit_stmt = $conn1->prepare("UPDATE forms SET res_limit = ? WHERE f_id = ? AND res_limit = ?");
+                        $limit_stmt->bind_param("isi", $dec_limit, $id, $limit);
+                        $limit_stmt->execute();
+                        $limit_stmt->close();
+                        
+                        // Disable form if limit reached
+                        if($dec_limit == 0){
+                            $status_stmt = $conn1->prepare("UPDATE forms SET status = 0 WHERE f_id = ?");
+                            $status_stmt->bind_param("s", $id);
+                            $status_stmt->execute();
+                            $status_stmt->close();
+                        }
+                    }
+                    
+                    // Get unique user ID and redirect
+                    $uid_stmt = $conn1->prepare("SELECT u_id FROM form_data WHERE id = ?");
+                    $uid_stmt->bind_param("i", $last_rec);
+                    $uid_stmt->execute();
+                    $uid_result = $uid_stmt->get_result();
+                    $uid_row = $uid_result->fetch_assoc();
+                    $uid_stmt->close();
+                    
+                    $refer_url = str_replace('{unique_user_id}', $uid_row['u_id'], $c_url);
+
+                    if (isset($refer_code) === true) {
+                        $refer_url = str_replace('{refer}', $refer_code, $refer_url);
+                    } else {
+                        $refer_url = str_replace('{refer}', "", $refer_url);
+                    }
+                    
+                    header('location: ' . $refer_url);
+                    exit();
+                } else {
+                    echo "<script>alert('Error submitting form. Please try again.');</script>";
+                    $insert_stmt->close();
+                }
+            }
         }
-        // echo "<script>alert('Form Updated successfully'); window.location = '".$c_url."'</script>";
     }
     ?>
 
@@ -205,10 +228,8 @@ if($status==1){
 else{
 ?>
 <?php
-
     echo "This Form is inactive";
 }
 ?>
 </html>
-<?php ob_end_flush();  ?>
-    
+<?php ob_end_flush(); ?>
