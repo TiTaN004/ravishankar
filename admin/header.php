@@ -10,7 +10,7 @@ if(!$_SESSION['login_user_name'])
 }
 
 ?>
- 
+<!DOCTYPE html>
 <html lang="en">
 <head>
   

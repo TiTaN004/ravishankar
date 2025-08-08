@@ -18,7 +18,7 @@ $status = $row['status'];
 $isActiveVender = $row['isActiveVender'];
 ?>
 
- 
+<!DOCTYPE html>
 <html lang="en">
 <html lang="en">
 

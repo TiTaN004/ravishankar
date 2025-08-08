@@ -13,7 +13,7 @@
     $count = $row['count'];
     $num = $row['num'];
 ?>
- 
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
