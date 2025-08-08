@@ -36,7 +36,7 @@
         $last_month = "error fetching";
     }
 ?>
-<!doctype html>
+ 
 <html lang="en">
   <head>
     <meta charset="utf-8">
