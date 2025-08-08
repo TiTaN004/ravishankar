@@ -12,16 +12,8 @@ include './backend/db/db.php';  ?>
       <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
       <title>FormFusion</title>
       <link rel="stylesheet" href="./assets/css/backend-plugin.min.css">
-      <link rel="stylesheet" href="./assets/css/backend.css?v=1.0.0">  </head>
-      <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17398416336"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-    
-      gtag('config', 'AW-17398416336');
-    </script>
+      <link rel="stylesheet" href="./assets/css/backend.css?v=1.0.0"> 
+    </head>
 
   <body class=" ">
     <!-- loader Start -->
